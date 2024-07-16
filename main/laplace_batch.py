@@ -1,9 +1,8 @@
 import torch
-import numpy as np
 from tqdm.auto import tqdm
-from batchbald_redux.batchbald import CandidateBatch, compute_conditional_entropy, compute_entropy
-
-import torch
+from batchbald_redux.batchbald import CandidateBatch
+from .bald_sampling import compute_bald, compute_entropy, compute_conditional_entropy
+import math
 
 def rank_reduce(matrix):
     '''
@@ -31,24 +30,21 @@ def get_laplace_batch(model, pool_loader, acquisition_batch_size, method, device
     device: device to run on
     dtype: data type
     method: method to use for batch selection
-        Options: 'logit_entropy', 'probit_entropy', 'entropy', 'BALD'
 
     Returns: batch of observations (CandiateBatch object)
     '''
     scores = torch.zeros(len(pool_loader.dataset), 1)
 
     if method == 'logit_entropy':
-
         for i, (data, _) in tqdm(enumerate(pool_loader), desc="Computing logit determinants", leave=False): 
             data = data.to(device=device)
             _, f_vars = model._glm_predictive_distribution(data, diagonal_output=False)
             scoring_batch_size = data.shape[0]
 
             # compute log determinant of each element of f_var
-            scores[i*scoring_batch_size:(i+1)*scoring_batch_size] = torch.tensor([(torch.det(f_vars[i])) for i in range(len(f_vars))]).unsqueeze(-1)
+            scores[i*scoring_batch_size:(i+1)*scoring_batch_size] = torch.tensor([(5*math.log(2*math.pi*math.e) + 0.5*torch.det(f_vars[i]).log()) for i in range(len(f_vars))]).unsqueeze(-1)
 
     elif method == 'probit_entropy':
-
         for i, (data, _) in tqdm(enumerate(pool_loader), desc="Computing probit determinants", leave=False): 
             data = data.to(device=device)
             scoring_batch_size = data.shape[0]
@@ -64,38 +60,22 @@ def get_laplace_batch(model, pool_loader, acquisition_batch_size, method, device
             scores[i*scoring_batch_size:(i+1)*scoring_batch_size] = determinants.unsqueeze(-1)
     
     elif method == 'entropy':
-
         for i, (data, _) in tqdm(enumerate(pool_loader), desc="Computing entropies", leave=False): 
             data = data.to(device=device)
             scoring_batch_size = data.shape[0]
 
-            # obtain samples
-            f_samples = model.predictive_samples(data, n_samples=1000)
-            p_given_f = torch.nn.functional.softmax(f_samples, dim=2)
+            ent = compute_entropy(model, data)
+            scores[i*scoring_batch_size:(i+1)*scoring_batch_size] = ent.unsqueeze(-1)
 
-            # compute entropy
-            log_probs_N_K_C = torch.log(p_given_f).swapaxes(0, 1)
-            ent = compute_entropy(log_probs_N_K_C).unsqueeze(-1)
-
-            scores[i*scoring_batch_size:(i+1)*scoring_batch_size] = ent
-
-    elif method == 'BALD':
+    elif method == 'bald':
         for i, (data, _) in tqdm(enumerate(pool_loader), desc="Computing BALD scores", leave=False): 
             data = data.to(device=device)
             scoring_batch_size = data.shape[0]
 
-            # obtain samples
-            f_samples = model.predictive_samples(data, n_samples=1000)
-            p_given_f = torch.nn.functional.softmax(f_samples, dim=2)
+            # compute BALD
+            bald = compute_bald(model, data, train_loader=None, refit=False, n_samples=10).unsqueeze(-1)
 
-            # compute entropy
-            log_probs_N_K_C = torch.log(p_given_f).swapaxes(0, 1)
-            ent = compute_entropy(log_probs_N_K_C).unsqueeze(-1)
-
-            # compute conditional entropy
-            cond_ent = compute_conditional_entropy(log_probs_N_K_C).unsqueeze(-1)
-
-            scores[i*scoring_batch_size:(i+1)*scoring_batch_size] = ent - cond_ent
+            scores[i*scoring_batch_size:(i+1)*scoring_batch_size] = bald
     else:
         raise ValueError('Invalid method')
     
