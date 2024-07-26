@@ -19,7 +19,10 @@ def compute_entropy_weights(la_model, data, n_samples=50):
     # Compute the entropy for each sample
     for i, weights in enumerate(posterior_weights):
         # Set the weights in the model
-        set_last_linear_layer_combined(la_model.model, weights)
+        if la_model.backend.last_layer:
+            set_last_linear_layer_combined(la_model.model, weights)
+        else:
+            set_full_parameters(la_model.model, weights)
 
         # Compute the predictive distribution
         probs[i] = la_model(data, pred_type='glm', link_approx='probit')
@@ -28,6 +31,20 @@ def compute_entropy_weights(la_model, data, n_samples=50):
     entropies = _h(probs.mean(dim=0))
     return entropies
 
+def set_full_parameters(model, new_weights):
+    new_weights = new_weights.flatten()
+    total_params = sum(p.numel() for p in model.parameters())
+    
+    if total_params != len(new_weights):
+        raise ValueError(f"Number of weights ({len(new_weights)}) does not match the model's parameter count ({total_params})")
+    
+    i = 0
+    for param in model.parameters():
+        n = param.numel()
+        param.data.copy_(new_weights[i:i+n].reshape(param.shape))
+        i += n
+    
+    return model  # Return the updated model    
 
 
 def set_last_linear_layer_combined(model, new_weights_and_bias):
@@ -66,7 +83,11 @@ def compute_conditional_entropy(la_model, data, train_loader, refit=True, n_samp
     # Compute the entropy for each sample
     for i, weights in enumerate(posterior_weights):
         # Set the weights in the model
-        set_last_linear_layer_combined(la_model.model, weights)
+        if la_model.backend.last_layer:
+            set_last_linear_layer_combined(la_model.model, weights)
+        else:
+            raise NotImplemented 
+            set_full_parameters(la_model.model, weights)
 
         if refit:
             # fit the model
