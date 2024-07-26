@@ -43,7 +43,7 @@ def get_laplace_batch(model, pool_loader, acquisition_batch_size, method, device
         indices = torch.randperm(len(pool_loader.dataset))[:acquisition_batch_size]
         return CandidateBatch(indices=indices.tolist(), scores=[0]*acquisition_batch_size)
     elif method == 'logit_entropy':
-        for i, (data, _) in tqdm(enumerate(pool_loader), desc="Computing logit determinants", leave=False): 
+        for i, (data, _) in tqdm(enumerate(pool_loader), desc="Computing logit determinants", leave=True): 
             data = data.to(device=device)
             _, f_vars = model._glm_predictive_distribution(data, diagonal_output=False)
             scoring_batch_size = data.shape[0]
@@ -52,7 +52,7 @@ def get_laplace_batch(model, pool_loader, acquisition_batch_size, method, device
             scores[i*scoring_batch_size:(i+1)*scoring_batch_size] = torch.tensor([(0.5*torch.logdet(f_vars[i])) for i in range(len(f_vars))]).unsqueeze(-1)
 
     elif method == 'softmax_entropy':
-        for i, (data, _) in tqdm(enumerate(pool_loader), desc="Computing probit determinants", leave=False): 
+        for i, (data, _) in tqdm(enumerate(pool_loader), desc="Computing probit determinants", leave=True): 
             data = data.to(device=device)
             scoring_batch_size = data.shape[0]
 
@@ -65,7 +65,7 @@ def get_laplace_batch(model, pool_loader, acquisition_batch_size, method, device
             scores[i*scoring_batch_size:(i+1)*scoring_batch_size] = entropies.unsqueeze(-1)
     
     elif method == 'entropy':
-        for i, (data, _) in tqdm(enumerate(pool_loader), desc="Computing entropies", leave=False): 
+        for i, (data, _) in tqdm(enumerate(pool_loader), desc="Computing entropies", leave=True): 
             data = data.to(device=device)
             scoring_batch_size = data.shape[0]
 
@@ -73,7 +73,7 @@ def get_laplace_batch(model, pool_loader, acquisition_batch_size, method, device
             scores[i*scoring_batch_size:(i+1)*scoring_batch_size] = ent.unsqueeze(-1)
 
     elif method == 'bald':
-        for i, (data, _) in tqdm(enumerate(pool_loader), desc="Computing BALD scores", leave=False): 
+        for i, (data, _) in tqdm(enumerate(pool_loader), desc="Computing BALD scores", leave=True): 
             data = data.to(device=device)
             scoring_batch_size = data.shape[0]
 
@@ -83,7 +83,7 @@ def get_laplace_batch(model, pool_loader, acquisition_batch_size, method, device
             scores[i*scoring_batch_size:(i+1)*scoring_batch_size] = bald
 
     elif method == 'max_diag_S':
-        for i, (data, _) in tqdm(enumerate(pool_loader), desc="Computing Jacobian eigenvalues", leave=False): 
+        for i, (data, _) in tqdm(enumerate(pool_loader), desc="Computing Jacobian eigenvalues", leave=True): 
             data = data.to(device=device)
             scoring_batch_size = data.shape[0]
 
