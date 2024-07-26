@@ -1,7 +1,10 @@
 import torch
+import numpy as np
+from scipy.stats import dirichlet
 from tqdm.auto import tqdm
 from batchbald_redux.batchbald import CandidateBatch
 from .bald_sampling import compute_bald, compute_entropy, compute_conditional_entropy
+from .approximation import compute_S
 import math
 
 def rank_reduce(matrix):
@@ -33,31 +36,33 @@ def get_laplace_batch(model, pool_loader, acquisition_batch_size, method, device
 
     Returns: batch of observations (CandiateBatch object)
     '''
-    scores = torch.zeros(len(pool_loader.dataset), 1)
+    scores = torch.empty(len(pool_loader.dataset), 1).to(device=device)
+    scores.fill_(float('-inf'))
 
-    if method == 'logit_entropy':
+    if method == 'random':
+        indices = torch.randperm(len(pool_loader.dataset))[:acquisition_batch_size]
+        return CandidateBatch(indices=indices.tolist(), scores=[0]*acquisition_batch_size)
+    elif method == 'logit_entropy':
         for i, (data, _) in tqdm(enumerate(pool_loader), desc="Computing logit determinants", leave=False): 
             data = data.to(device=device)
             _, f_vars = model._glm_predictive_distribution(data, diagonal_output=False)
             scoring_batch_size = data.shape[0]
 
             # compute log determinant of each element of f_var
-            scores[i*scoring_batch_size:(i+1)*scoring_batch_size] = torch.tensor([(5*math.log(2*math.pi*math.e) + 0.5*torch.det(f_vars[i]).log()) for i in range(len(f_vars))]).unsqueeze(-1)
+            scores[i*scoring_batch_size:(i+1)*scoring_batch_size] = torch.tensor([(0.5*torch.logdet(f_vars[i])) for i in range(len(f_vars))]).unsqueeze(-1)
 
-    elif method == 'probit_entropy':
+    elif method == 'softmax_entropy':
         for i, (data, _) in tqdm(enumerate(pool_loader), desc="Computing probit determinants", leave=False): 
             data = data.to(device=device)
             scoring_batch_size = data.shape[0]
-        
-            # returns softmax of samples of f
-            f_samples = model.predictive_samples(data, n_samples=10000)
 
-            # compute covariance of each element of f_samples, and drop the last class  
-            covs = torch.stack([torch.cov(f_samples[:, n, :].T)[:-1, :-1] for n in range(f_samples.shape[1])])
-            
-            # compute determinant of each element of f_var
-            determinants = torch.tensor([(torch.det(covs[i])) for i in range(len(covs))])
-            scores[i*scoring_batch_size:(i+1)*scoring_batch_size] = determinants.unsqueeze(-1)
+            # get logits
+            logits = model(data, pred_type='glm', link_approx='probit')
+                    
+            # for each sample, compute entropy using categorical distribution
+            entropies = torch.tensor([dirichlet(alpha=logits[i]).entropy() for i in range(len(logits))])
+
+            scores[i*scoring_batch_size:(i+1)*scoring_batch_size] = entropies.unsqueeze(-1)
     
     elif method == 'entropy':
         for i, (data, _) in tqdm(enumerate(pool_loader), desc="Computing entropies", leave=False): 
@@ -76,6 +81,24 @@ def get_laplace_batch(model, pool_loader, acquisition_batch_size, method, device
             bald = compute_bald(model, data, train_loader=None, refit=False, n_samples=10).unsqueeze(-1)
 
             scores[i*scoring_batch_size:(i+1)*scoring_batch_size] = bald
+
+    elif method == 'max_diag_S':
+        for i, (data, _) in tqdm(enumerate(pool_loader), desc="Computing Jacobian eigenvalues", leave=False): 
+            data = data.to(device=device)
+            scoring_batch_size = data.shape[0]
+
+            S = compute_S(model, data)
+
+            scores[i*scoring_batch_size:(i+1)*scoring_batch_size] = torch.diag(S).unsqueeze(-1)
+    elif method == 'max_logdet_S':
+        # extract data from the pool
+        pool_data = torch.cat([data for data, _ in pool_loader], dim=0).to(device=device)
+
+        S = compute_S(model, pool_data)
+        # add identity matrix to S
+        mat = S + torch.eye(S.shape[0]).to(device=device)
+        indices, log_det, _ = stochastic_greedy_maxlogdet(mat, acquisition_batch_size)
+        return CandidateBatch(indices=indices, scores=[log_det]*acquisition_batch_size)
     else:
         raise ValueError('Invalid method')
     
@@ -84,5 +107,97 @@ def get_laplace_batch(model, pool_loader, acquisition_batch_size, method, device
     values, indices = torch.topk(scores, acquisition_batch_size, largest=True, sorted=False, dim=0)
     return CandidateBatch(indices=indices.squeeze().tolist(), scores=values.squeeze().tolist())
 
+
         
+def greedy_max_logdet(matrix, k):
+    """
+    Greedily selects k rows and columns from the input matrix to maximize the determinant.
     
+    Args:
+    matrix (torch.Tensor): NxN input matrix
+    k (int): Size of the submatrix to select
+    
+    Returns:
+    tuple: (selected_indices, max_determinant)
+    """
+    N = matrix.shape[0]
+    if k > N:
+        raise ValueError("k cannot be larger than the matrix size")
+    
+    # Initialize the list of selected indices
+    selected_indices = []
+    
+    for _ in range(k):
+        max_det = float('-inf')
+        best_index = -1
+        
+        # Try adding each remaining index and calculate the determinant
+        for i in range(N):
+            if i not in selected_indices:
+                current_indices = selected_indices + [i]
+                submatrix = matrix[current_indices][:, current_indices]
+                det = torch.det(submatrix).item()
+                
+                # Update if we found a better determinant
+                if det > max_det:
+                    max_det = det
+                    best_index = i
+        
+        # Add the best index found in this iteration
+        selected_indices.append(best_index)
+    
+    # Calculate the final determinant
+    final_submatrix = matrix[selected_indices][:, selected_indices]
+    max_determinant = torch.logdet(final_submatrix).item()/2
+    
+    return selected_indices, max_determinant, final_submatrix
+
+def stochastic_greedy_maxlogdet(matrix, k, eps=0.9):
+    """
+    Stochastically selects k rows and columns from the input matrix to maximize the determinant.
+    
+    Args:
+    matrix (torch.Tensor): NxN input matrix
+    k (int): Size of the submatrix to select
+    eps (int): Measure of how close to the optimal solution we want to be
+    
+    Returns:
+    tuple: (selected_indices, max_determinant)
+    """
+    N = matrix.shape[0]
+    if k > N:
+        raise ValueError("k cannot be larger than the matrix size")
+    
+    # using formula from Lazier than Greedy
+    n_samples = int((N / k) * math.log(1/eps))
+
+    # Initialize the list of selected indices
+    selected_indices = []
+    
+    for _ in range(k):
+        max_det = float('-inf')
+        best_index = -1
+
+        # take random subsample (of n_samples) from the remaining indices
+        remaining_indices = [i for i in range(N) if i not in selected_indices]
+        subsample = np.random.choice(remaining_indices, n_samples, replace=False)
+
+        # Try adding each index from subsample and calculate the determinant
+        for i in subsample:
+            current_indices = selected_indices + [i]
+            submatrix = matrix[current_indices][:, current_indices]
+            det = torch.det(submatrix).item()
+            
+            # Update if we found a better determinant
+            if det > max_det:
+                max_det = det
+                best_index = i
+        
+        # Add the best index found in this iteration
+        selected_indices.append(best_index)
+    
+    # Calculate the final determinant
+    final_submatrix = matrix[selected_indices][:, selected_indices]
+    max_determinant = torch.logdet(final_submatrix).item()/2
+    
+    return selected_indices, max_determinant, final_submatrix
