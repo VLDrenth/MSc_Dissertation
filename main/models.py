@@ -1,9 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
 from batchbald_redux import consistent_mc_dropout
-
 
 class BayesianConvNet(consistent_mc_dropout.BayesianModule):
     '''
@@ -30,13 +28,65 @@ class BayesianConvNet(consistent_mc_dropout.BayesianModule):
 
         return input
     
+
 class ConvNet(nn.Module):
+    '''
+    Convolutional neural network with two convolutional layers and two fully connected layers,
+    compatible with BackPACK.
+    '''
+
+    def __init__(self):
+        super(ConvNet, self).__init__()
+        self.dim_out = 32
+        
+        self.features = nn.Sequential(
+            nn.Conv2d(in_channels=1, out_channels=16, kernel_size=5, stride=1),
+            nn.GELU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Conv2d(in_channels=16, out_channels=self.dim_out, kernel_size=5, stride=1),
+            nn.GELU(),
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            nn.Flatten()
+        )
+        
+        self.classifier = nn.Sequential(
+            nn.Linear(4*4*self.dim_out, self.dim_out),
+            nn.GELU(),
+            nn.Linear(self.dim_out, 10)
+        )
+
+        
+    def forward(self, x):
+        x = self.features(x)
+        x = self.classifier(x)
+        return x
+
+
+class MLP(nn.Module):
+    '''
+    Multi-layer perceptron with two hidden layers.
+    '''
+
+    def __init__(self):
+        super(MLP, self).__init__()
+        self.fc1 = nn.Linear(28*28, 128)
+        self.fc2 = nn.Linear(128, 32)
+        self.fc3 = nn.Linear(32, 10)
+        
+    def forward(self, x):
+        x = x.view(-1, 28*28)  # Flatten the input
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x
+
+class CNN(nn.Module):
     '''
     Convolutional neural network with two convolutional layers and two fully connected layers.
     '''
 
     def __init__(self):
-        super(ConvNet, self).__init__()
+        super(CNN, self).__init__()
         self.dim_out = 16
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=8, kernel_size=5, stride=1)
         self.conv2 = nn.Conv2d(in_channels=8, out_channels=self.dim_out, kernel_size=5, stride=1)
@@ -51,22 +101,4 @@ class ConvNet(nn.Module):
         x = x.view(-1, 4*4*self.dim_out)  # Flatten the output
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
-        return x
-
-class MLP(nn.Module):
-    '''
-    Multi-layer perceptron with two hidden layers.
-    '''
-
-    def __init__(self):
-        super(MLP, self).__init__()
-        self.fc1 = nn.Linear(28*28, 128)
-        self.fc2 = nn.Linear(128, 64)
-        self.fc3 = nn.Linear(64, 10)
-        
-    def forward(self, x):
-        x = x.view(-1, 28*28)  # Flatten the input
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
         return x
