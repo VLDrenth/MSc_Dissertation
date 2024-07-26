@@ -28,7 +28,7 @@ class ActiveLearningConfig:
     extract_pool: int = 55000
 
 
-def run_active_learning(train_dataset, test_dataset, model_constructor, config, device):
+def run_active_learning(train_loader, test_loader, pool_loader, active_learning_data, model_constructor, config, device):
     kwargs = {"num_workers": 1, "pin_memory": True}
 
     if config.backend == 'AsdlGGN':
@@ -37,32 +37,6 @@ def run_active_learning(train_dataset, test_dataset, model_constructor, config, 
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     logger = logging.getLogger(__name__)
 
-
-    # get indices of initial samples
-    initial_samples = active_learning.get_balanced_sample_indices(
-        repeated_mnist.get_targets(train_dataset), num_classes=config.num_classes, n_per_digit=config.num_initial_samples / config.num_classes
-    )
-
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=config.test_batch_size, shuffle=False, **kwargs)
-
-    active_learning_data = active_learning.ActiveLearningData(train_dataset)
-
-    # Split off the initial samples first.
-    active_learning_data.acquire(initial_samples)
-
-    # THIS REMOVES MOST OF THE POOL DATA. REMOVE THIS LINE TO USE THE FULL POOL
-    active_learning_data.extract_dataset_from_pool(config.extract_pool)
-
-    train_loader = torch.utils.data.DataLoader(
-        active_learning_data.training_dataset,
-        sampler=active_learning.RandomFixedLengthSampler(active_learning_data.training_dataset, config.training_iterations),
-        batch_size=config.train_batch_size,
-        **kwargs,
-    )
-
-    pool_loader = torch.utils.data.DataLoader(
-        active_learning_data.pool_dataset, batch_size=config.scoring_batch_size, shuffle=False, **kwargs
-    )
     # Run experiment
     test_accs = []
     test_loss = []
@@ -131,17 +105,14 @@ def run_active_learning(train_dataset, test_dataset, model_constructor, config, 
                             temperature=config.temperature/len(active_learning_data.training_dataset),
                         )
         
-        print('Fitting Laplace')
         la.fit(train_loader, progress_bar=False)
 
-        print('Optimizing prior precision')
         la.optimize_prior_precision(method='marglik', verbose=False, pred_type='glm', link_approx='probit')
         
         candidate_batch = get_laplace_batch(model=la, pool_loader=pool_loader,
                                                 acquisition_batch_size=config.acquisition_batch_size,
                                                 device=device, 
                                                 method=config.al_method)
-
 
         targets = repeated_mnist.get_targets(active_learning_data.pool_dataset)
         dataset_indices = active_learning_data.get_dataset_indices(candidate_batch.indices)
