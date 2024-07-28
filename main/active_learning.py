@@ -102,7 +102,7 @@ def run_active_learning(train_loader, test_loader, pool_loader, active_learning_
                             subset_of_weights=config.subset_of_weights,
                             hessian_structure=config.hessian_structure,
                             backend=backend,
-                            temperature=config.temperature/len(active_learning_data.training_dataset),
+                            temperature=config.temperature
                         )
         
         la.fit(train_loader, progress_bar=False)
