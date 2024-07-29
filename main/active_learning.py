@@ -104,10 +104,10 @@ def run_active_learning(train_loader, test_loader, pool_loader, active_learning_
                             backend=backend,
                             temperature=config.temperature
                         )
-        
-        la.fit(train_loader, progress_bar=False)
+        if config.al_method != 'random':
+            la.fit(train_loader, progress_bar=False)
 
-        la.optimize_prior_precision(method='marglik', verbose=False, pred_type='glm', link_approx='probit')
+            la.optimize_prior_precision(method='marglik', verbose=False, pred_type='glm', link_approx='probit')
         
         candidate_batch = get_laplace_batch(model=la, pool_loader=pool_loader,
                                                 acquisition_batch_size=config.acquisition_batch_size,

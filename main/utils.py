@@ -1,6 +1,7 @@
 import dill
 import time
 import os
+import json
 
 def generate_experiment_id():
     """Generates a unique experiment ID based on the current timestamp."""
@@ -53,3 +54,7 @@ def load_experiment(experiment_id, base_dir='experiments'):
         results = dill.load(f)
 
     return config, results
+
+def load_experiments(experiment_ids, base_dir='experiments'):
+    """Loads multiple experiments given a list of experiment IDs."""
+    return [load_experiment(exp_id, base_dir) for exp_id in experiment_ids]
