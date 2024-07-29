@@ -8,7 +8,7 @@ def create_MNIST_dataloaders(config, **kwargs):
     train_dataset, test_dataset = repeated_mnist.create_MNIST_dataset()
 
     # Create data loaders
-    train_loader, test_loader, pool_loader, active_learning_data = create_dataloaders_AL(train_dataset, test_dataset, config, kwargs)
+    train_loader, test_loader, pool_loader, active_learning_data = create_dataloaders_AL(train_dataset, test_dataset, config)
 
     return train_loader, test_loader, pool_loader, active_learning_data
 

@@ -19,15 +19,22 @@ def H_p(model, x):
         H_p[j] = -(1/pi[j].unsqueeze(-1)) * softmax_jacobian(J[j], pi[j])
     return H_p
 
-def compute_S(model, x):
+def compute_S(model, x, hard_label=True):
     '''
     Function to compute the S matrix
     '''
     hp = H_p(model, x)
-    predicted = model(x).argmax(dim=1)
+    probs = model(x)
+    if hard_label:
+        # pick the class with the highest probability
+        label = probs.argmax(dim=1)
+    else:
+        # sample from the predicted probabilities
+        label = torch.distributions.Categorical(probs).sample()
+        
     precision = model.posterior_precision.to_matrix()
 
-    hp_hat = hp[torch.arange(hp.shape[0]), predicted].view(hp.shape[0], -1)  # (batch, num_parameters)    precision = model.posterior_precision.to_matrix()
+    hp_hat = hp[torch.arange(hp.shape[0]), label].view(hp.shape[0], -1)  # (batch, num_parameters)    precision = model.posterior_precision.to_matrix()
     S = hp_hat @ precision.inverse() @ hp_hat.T
     return S    
 
