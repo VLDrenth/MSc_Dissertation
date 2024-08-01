@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import gpytorch as gpt
 from scipy.stats import dirichlet
 from tqdm.auto import tqdm
 from batchbald_redux.batchbald import CandidateBatch
@@ -152,7 +153,7 @@ def greedy_max_logdet(matrix, k):
     
     return selected_indices, max_determinant, final_submatrix
 
-def stochastic_greedy_maxlogdet(matrix, k, eps=0.9):
+def stochastic_greedy_maxlogdet(matrix, k, eps=0.2, lancoz=False):
     """
     Stochastically selects k rows and columns from the input matrix to maximize the determinant.
     
@@ -186,8 +187,12 @@ def stochastic_greedy_maxlogdet(matrix, k, eps=0.9):
         for i in subsample:
             current_indices = selected_indices + [i]
             submatrix = matrix[current_indices][:, current_indices]
-            det = torch.det(submatrix).item()
             
+            if lancoz:
+                det = gpt.inv_quad_logdet(submatrix, logdet=True, reduce_inv_quad=False)[1].item()
+            else:
+                det = torch.logdet(submatrix).item()
+
             # Update if we found a better determinant
             if det > max_det:
                 max_det = det
@@ -198,6 +203,9 @@ def stochastic_greedy_maxlogdet(matrix, k, eps=0.9):
     
     # Calculate the final determinant
     final_submatrix = matrix[selected_indices][:, selected_indices]
-    max_determinant = torch.logdet(final_submatrix).item()/2
-    
+    if lancoz:
+        max_determinant = gpt.inv_quad_logdet(final_submatrix, logdet=True, reduce_inv_quad=False)[1].item()/2
+    else:
+        max_determinant = torch.logdet(final_submatrix).item()/2
+
     return selected_indices, max_determinant, final_submatrix
