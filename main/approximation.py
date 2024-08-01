@@ -19,46 +19,24 @@ def H_p(model, x):
         H_p[j] = -(1/pi[j].unsqueeze(-1)) * softmax_jacobian(J[j], pi[j])
     return H_p
 
-def compute_S(model, x, hard_label=True):
+def compute_S(model, x, pseudo_label='hard_label'):
     '''
     Function to compute the S matrix
     '''
     hp = H_p(model, x)
     probs = model(x)
-    if hard_label:
+    if pseudo_label == 'hard_label':
         # pick the class with the highest probability
         label = probs.argmax(dim=1)
-    else:
+    elif pseudo_label == 'soft_label':
         # sample from the predicted probabilities
         label = torch.distributions.Categorical(probs).sample()
-        
+    
     precision = model.posterior_precision.to_matrix()
 
     hp_hat = hp[torch.arange(hp.shape[0]), label].view(hp.shape[0], -1)  # (batch, num_parameters)    precision = model.posterior_precision.to_matrix()
     S = hp_hat @ precision.inverse() @ hp_hat.T
-    return S    
-
-def sample_hp_hat(la_model, x_test):
-    '''
-    Idea was to sample hp_hat using predicted probabilities
-    But gives a lot of zeros
-    '''
-    batch_size = x_test.shape[0]
-    hp = H_p(la_model, x_test)  # (batch, num_classes, num_parameters)
-    probs = la_model(x_test)
-
-    # for each row inprobs set all but the predicted class to 0
-    #probs = torch.nn.functional.one_hot(probs.argmax(dim=1), num_classes=probs.shape[1])
-
-    hp_hat = torch.zeros(batch_size, hp.shape[2])
-
-    for i in range(batch_size):
-        for class_index, p in enumerate(probs[i]):
-            hp_hat[i] += p*hp[i, class_index]
-
-    return hp_hat
-
-
+    return S 
 
 def compute_eig(model, x):
     '''

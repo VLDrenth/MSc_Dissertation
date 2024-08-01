@@ -103,7 +103,6 @@ def get_laplace_batch(model, pool_loader, acquisition_batch_size, method, device
     else:
         raise ValueError('Invalid method')
     
-    
     # Compute top k scores
     values, indices = torch.topk(scores, acquisition_batch_size, largest=True, sorted=False, dim=0)
     return CandidateBatch(indices=indices.squeeze().tolist(), scores=values.squeeze().tolist())

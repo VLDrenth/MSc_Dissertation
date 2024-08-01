@@ -12,7 +12,6 @@ def create_MNIST_dataloaders(config, **kwargs):
 
     return train_loader, test_loader, pool_loader, active_learning_data
 
-
 def create_repeated_MNIST_dataloaders(config, **kwargs):
     # Set up transforms
     transform = transforms.Compose([
