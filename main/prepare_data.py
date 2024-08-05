@@ -1,16 +1,30 @@
 from batchbald_redux import repeated_mnist, active_learning
 from torch.utils import data
+from ddu_dirty_mnist import DirtyMNIST
 import torch
 from torchvision import datasets, transforms
 
-def create_MNIST_dataloaders(config, **kwargs):
+def create_dataloaders(config, **kwargs):
     # loading data
-    train_dataset, test_dataset = repeated_mnist.create_MNIST_dataset()
-
+    if config.dataset == 'mnist':
+        train_dataset, test_dataset = repeated_mnist.create_MNIST_dataset()
+    elif config.dataset == 'repeated_mnist':
+        train_dataset, test_dataset = repeated_mnist.create_repeated_MNIST_dataset()
+    elif config.dataset == 'dirty_mnist':
+        train_dataset, test_dataset = create_dirty_MNIST_dataset()
+    else:
+        raise ValueError(f'Unknown dataset {config.dataset}')
+    
     # Create data loaders
     train_loader, test_loader, pool_loader, active_learning_data = create_dataloaders_AL(train_dataset, test_dataset, config)
 
     return train_loader, test_loader, pool_loader, active_learning_data
+
+def create_dirty_MNIST_dataset():
+    train_dataset = DirtyMNIST("./data", train=True, download=False)
+    test_dataset = DirtyMNIST("./data", train=False, download=False)
+    return train_dataset, test_dataset
+
 
 def create_repeated_MNIST_dataloaders(config, **kwargs):
     # Set up transforms
