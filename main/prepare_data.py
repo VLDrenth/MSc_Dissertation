@@ -12,6 +12,8 @@ def create_dataloaders(config, **kwargs):
         train_dataset, test_dataset = repeated_mnist.create_repeated_MNIST_dataset()
     elif config.dataset == 'dirty_mnist':
         train_dataset, test_dataset = create_dirty_MNIST_dataset()
+    elif config.dataset == 'fashion_mnist':
+        train_dataset, test_dataset = create_fashion_MNIST_dataset()
     else:
         raise ValueError(f'Unknown dataset {config.dataset}')
     
@@ -23,6 +25,21 @@ def create_dataloaders(config, **kwargs):
 def create_dirty_MNIST_dataset():
     train_dataset = DirtyMNIST("./data", train=True, download=False)
     test_dataset = DirtyMNIST("./data", train=False, download=False)
+    return train_dataset, test_dataset
+
+def create_fashion_MNIST_dataset(data_dir="./data"):
+    # Set up transforms
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.2860,), (0.3530,))  # Fashion MNIST mean and std
+    ])
+
+    # Load train dataset
+    train_dataset = datasets.FashionMNIST(data_dir, train=True, download=True, transform=transform)
+
+    # Load test dataset
+    test_dataset = datasets.FashionMNIST(data_dir, train=False, download=True, transform=transform)
+
     return train_dataset, test_dataset
 
 
