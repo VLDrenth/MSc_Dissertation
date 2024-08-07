@@ -55,6 +55,8 @@ def get_config(min_samples, max_samples, acquisition_batch_size, method, dataset
     config.al_method = method
     config.dataset = dataset
     config.acquisition_batch_size = acquisition_batch_size
-    return config
+
+    experiment_name = f"{method}_{dataset}_{min_samples}_to_{max_samples}_B={acquisition_batch_size}"
+    return config, experiment_name
 
     
