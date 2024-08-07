@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import gpytorch as gpt
 from scipy.stats import dirichlet
+from .badge import badge_selection
 from tqdm.auto import tqdm
 from batchbald_redux.batchbald import CandidateBatch
 from .bald_sampling import compute_bald, compute_entropy, compute_conditional_entropy
@@ -100,6 +101,9 @@ def get_laplace_batch(model, pool_loader, acquisition_batch_size, method, device
         mat = S + torch.eye(S.shape[0]).to(device=device)
         indices, log_det, _ = stochastic_greedy_maxlogdet(mat, acquisition_batch_size)
         return CandidateBatch(indices=indices, scores=[log_det]*acquisition_batch_size)
+    elif method == 'badge':
+        indices = badge_selection(model.model, pool_loader.dataset, acquisition_batch_size)
+        return CandidateBatch(indices=indices, scores=[0]*acquisition_batch_size)
     else:
         raise ValueError('Invalid method')
     
