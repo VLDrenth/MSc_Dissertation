@@ -55,11 +55,16 @@ class ConvNet(nn.Module):
             nn.Linear(self.dim_out, 10)
         )
 
+        self._last_layer = self.classifier[2]
+
         
     def forward(self, x):
         x = self.features(x)
         x = self.classifier(x)
         return x
+    
+    def get_last_layer_parameters(self):
+        return self._last_layer.parameters()
 
 
 class MLP(nn.Module):
