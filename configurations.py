@@ -1,0 +1,60 @@
+from dataclasses import dataclass
+
+# set configurations for redundant MNIST experiment
+@dataclass
+class ActiveLearningConfigRedundant:
+    subset_of_weights: str = 'last_layer'
+    hessian_structure: str = 'kron'
+    backend: str = 'AsdlGGN'
+    temperature: float = 1.0
+    max_training_samples: int = 100
+    acquisition_batch_size: int = 5
+    al_method: str = 'bald'
+    test_batch_size: int = 512
+    num_classes: int = 10
+    num_initial_samples: int = 40
+    training_iterations: int = 4096 * 6
+    scoring_batch_size: int = 64
+    train_batch_size: int = 64
+    extract_pool: int = 0
+    num_repeats: int = 10
+    samples_per_digit: int = 50
+
+@dataclass
+class ActiveLearningConfig:
+    subset_of_weights: str = 'last_layer'
+    hessian_structure: str = 'kron'
+    backend: str = 'AsdlGGN'
+    temperature: float = 1
+    max_training_samples: int = 500
+    acquisition_batch_size: int = 100
+    al_method: str = 'badge'
+    test_batch_size: int = 512
+    num_classes: int = 10
+    num_initial_samples: int = 50
+    training_iterations: int = 4096 * 6
+    scoring_batch_size: int = 64
+    train_batch_size: int = 64
+    extract_pool: int = 59000  # number of samples to extract from the dataset (bit of a hack)
+    dataset: str = 'mnist'
+
+def get_config(min_samples, max_samples, acquisition_batch_size, method, dataset):
+    '''
+    Returns dataclass object with active learning configuration
+    --------------------------------
+    min_samples: int - number of initial samples
+    max_samples: int - maximum number of training samples
+    acquisition_batch_size: int - number of samples to acquire per iteration
+    method: str - method to use for batch selection
+    dataset: str - dataset to uses
+
+    '''
+    config = ActiveLearningConfig()
+    config.num_initial_samples = min_samples
+    config.max_training_samples = max_samples
+    config.al_method = method
+    config.dataset = dataset
+    config.acquisition_batch_size = acquisition_batch_size
+    return config
+
+    
