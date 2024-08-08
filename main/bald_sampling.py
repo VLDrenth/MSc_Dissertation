@@ -115,6 +115,70 @@ def compute_bald(la_model, data, train_loader, refit=True, n_samples=50):
 
     return bald
 
+def compute_normal_entropy(cov):
+    return 0.5 * torch.logdet(cov) + 0.5 * cov.shape[0] * (1 + torch.log(torch.tensor(2 * torch.pi)))
+
+
+def compute_joint_eig(model, x):
+    '''
+    Function to compute the joint expected information gain
+    --------------------------------
+    Input:
+    model: the model
+    x: the input data
+    --------------------------------
+    
+    Output:
+    eig: the joint expected information gain
+
+    Details: Computes I[theta; Y | X] = H[Y|X] + H[THETA | X] - H[Y, theta | X]
+    '''
+    # Using predictive distribution of Y given X (Based on extended probit)
+    ent_y = compute_entropy(model, x)
+
+    # Using the posterior distribution of theta
+    cov_theta = model.posterior_precision.to_matrix().inverse()
+    ent_theta = compute_normal_entropy(cov_theta)
+
+    # Joint of Y and theta is given by p(y | theta, x) * p(theta | x) (Both conditional on training data)
+    ent_joint = compute_joint_entropy(model, x)
+
+    eig = ent_y + ent_theta - ent_joint
+    
+    return eig
+
+def compute_joint_entropy(model, x, K):
+    
+    N = x.shape[0]
+
+    # Sample theta from the posterior
+    posterior_weights = model.sample(n_samples=K)
+
+    D = posterior_weights.shape[1]
+
+    assert K > N + D # Ensure that the number of samples is greater than the number of parameters and data points
+
+    # For each theta, compute the predicted probabilities
+    probs = torch.zeros(K, N, 10)
+
+    for i, weights in enumerate(posterior_weights):
+        set_last_linear_layer_combined(model.model, weights)
+        probs[i] = model(x, pred_type='glm', link_approx='bridge')
+    
+    # Without flattening stack the probabilities and the weights into a tensor of shape: (K, (D + N))
+    probs_and_theta = torch.cat([probs.view(K, -1), posterior_weights], dim=1)
+
+    # reshape to (D + N, K)
+    probs_and_theta = probs_and_theta.T
+    
+    # Obtain the covariance matrix of the joint distribution of Y and theta of shape: (D + N, D + N)
+    cov_joint = torch.cov(probs_and_theta)
+
+    # Compute the entropy of the joint
+    ent_joint = compute_normal_entropy(cov_joint)
+
+    return ent_joint, probs, cov_joint
+
 
 if __name__ == '__main__':
     pass
