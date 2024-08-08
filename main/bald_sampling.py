@@ -180,6 +180,14 @@ def compute_joint_entropy(model, x, K):
     return ent_joint, probs, cov_joint
 
 
+def compute_emp_cov(la, x_test, K=1000):
+    res = la.predictive_samples(x_test, n_samples=K)  # shape K x N x C
+    avg = res.mean(dim=0)  # shape   N x C
+    res -= avg.unsqueeze(0)  # shape K x N x C
+
+    cov_k = torch.einsum('knc,kmc->nm', res, res) / K
+    return cov_k
+
 if __name__ == '__main__':
     pass
 
