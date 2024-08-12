@@ -5,7 +5,7 @@ from scipy.stats import dirichlet
 from .badge import badge_selection
 from tqdm.auto import tqdm
 from batchbald_redux.batchbald import CandidateBatch
-from .bald_sampling import compute_bald, compute_entropy, compute_conditional_entropy
+from .bald_sampling import compute_bald, compute_entropy, compute_conditional_entropy, compute_emp_cov, max_joint_eig
 from .approximation import compute_S
 import math
 
@@ -104,6 +104,25 @@ def get_laplace_batch(model, pool_loader, acquisition_batch_size, method, device
     elif method == 'badge':
         indices = badge_selection(model.model, pool_loader.dataset, acquisition_batch_size)
         return CandidateBatch(indices=indices, scores=[0]*acquisition_batch_size)
+    elif method == 'empirical_covariance':
+         # extract data from the pool
+        pool_data = torch.cat([data for data, _ in pool_loader], dim=0).to(device=device)
+
+        # compute the empirical covariance matrix
+        cov = compute_emp_cov(model, pool_data)
+
+        # add identity matrix to S
+        mat = cov + torch.eye(cov.shape[0]).to(device=device)
+
+        indices, log_det, _ = stochastic_greedy_maxlogdet(mat, acquisition_batch_size)
+        return CandidateBatch(indices=indices, scores=[log_det]*acquisition_batch_size)
+    elif method == 'joint_eig':
+        # extract data from the pool
+        pool_data = torch.cat([data for data, _ in pool_loader], dim=0).to(device=device)
+
+        indices, score = max_joint_eig(model=model, data=pool_data, K=100, batch_size=acquisition_batch_size)
+
+        return CandidateBatch(indices=indices, scores=[score]*acquisition_batch_size)
     else:
         raise ValueError('Invalid method')
     
