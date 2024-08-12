@@ -59,7 +59,10 @@ def run_active_learning(train_loader, test_loader, pool_loader, active_learning_
 
             optimizer.zero_grad()
 
-            prediction = torch.log_softmax(model(data).squeeze(1), dim=1)
+            logits = model(data)
+            if config.al_method == 'badge':
+                logits = logits[0]
+            prediction = torch.log_softmax(logits.squeeze(1), dim=1)
             loss = loss_fn(prediction, target)
 
             loss.backward()
@@ -73,7 +76,11 @@ def run_active_learning(train_loader, test_loader, pool_loader, active_learning_
                 data = data.to(device=device)
                 target = target.to(device=device)
 
-                prediction = model(data).squeeze(1)
+                logits = model(data)
+                if config.al_method == 'badge':
+                    logits = logits[0]
+
+                prediction = torch.log_softmax(logits.squeeze(1), dim=1)
                 loss += loss_fn(prediction, target)
 
                 prediction = prediction.argmax(dim=1)
@@ -104,15 +111,20 @@ def run_active_learning(train_loader, test_loader, pool_loader, active_learning_
                             backend=backend,
                             temperature=config.temperature
                         )
-        if config.al_method != 'random':
+        if config.al_method not in  ['random', 'badge']:
             la.fit(train_loader, progress_bar=False)
 
             la.optimize_prior_precision(method='marglik', verbose=False, pred_type='glm', link_approx='probit')
-        
-        candidate_batch = get_laplace_batch(model=la, pool_loader=pool_loader,
-                                                acquisition_batch_size=config.acquisition_batch_size,
-                                                device=device, 
-                                                method=config.al_method)
+            
+            candidate_batch = get_laplace_batch(model=la, pool_loader=pool_loader,
+                                                    acquisition_batch_size=config.acquisition_batch_size,
+                                                    device=device, 
+                                                    method=config.al_method)
+        else:
+            candidate_batch = get_laplace_batch(model=model, pool_loader=pool_loader,
+                                                    acquisition_batch_size=config.acquisition_batch_size,
+                                                    device=device, 
+                                                    method=config.al_method)
 
         targets = repeated_mnist.get_targets(active_learning_data.pool_dataset)
         dataset_indices = active_learning_data.get_dataset_indices(candidate_batch.indices)
