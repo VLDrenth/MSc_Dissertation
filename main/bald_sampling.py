@@ -1,15 +1,21 @@
 import torch
+from sklearn.covariance import LedoitWolf
+
 
 def compute_entropy(la_model, data):
     # for each datapoint compute the probabilties of each class
     p = la_model(data, pred_type='glm', link_approx='probit')  # (n_data, n_classes)
-    entropy = _h(p)  
+    entropy = _h(p)
 
     return entropy
 
 def _h(p):
     # p is a tensor of shape (n_data, n_classes)
     return -torch.sum(p * torch.log(p + 1e-12), dim=1)
+
+def compute_multivariate_entropy(la_model, data):
+    ent = compute_entropy(la_model, data)
+    return ent.sum()
 
 def compute_entropy_weights(la_model, data, n_samples=50):
     # Sample from the posterior
@@ -118,14 +124,51 @@ def compute_bald(la_model, data, train_loader, refit=True, n_samples=50):
 def compute_normal_entropy(cov):
     return 0.5 * torch.logdet(cov) + 0.5 * cov.shape[0] * (1 + torch.log(torch.tensor(2 * torch.pi)))
 
+def max_joint_eig(model, data, K, batch_size):
+    '''
+    Function to greedily compute the maximum joint expected information gain
+    --------------------------------
+    Input:
+    model: the laplace approximation model
+    data: pool dataset
+    K: the number of samples to compute the joint expected information gain
+    --------------------------------
+    
+    Output:
+    indices, eig: the maximum joint expected information gain and the indices of the selected samples    
+    '''
+    selected_indices = []
+    N = data.shape[0]
 
-def compute_joint_eig(model, x):
+    for _ in range(batch_size):
+        max_eig = -torch.inf
+        max_index = None
+
+        for i in range(N):
+            if i in selected_indices:
+                continue
+            current_indices = selected_indices + [i]
+            current_data = data[current_indices]
+
+            eig = compute_joint_eig(model, current_data, K)
+
+            if eig > max_eig:
+                max_eig = eig
+                max_index = i
+            
+        selected_indices.append(max_index)
+        print('selected:', selected_indices)
+
+    return selected_indices, max_eig
+
+def compute_joint_eig(model, x, K, C=10):
     '''
     Function to compute the joint expected information gain
     --------------------------------
     Input:
     model: the model
     x: the input data
+    K: the number of samples to compute the joint expected information gain
     --------------------------------
     
     Output:
@@ -133,21 +176,25 @@ def compute_joint_eig(model, x):
 
     Details: Computes I[theta; Y | X] = H[Y|X] + H[THETA | X] - H[Y, theta | X]
     '''
-    # Using predictive distribution of Y given X (Based on extended probit)
-    ent_y = compute_entropy(model, x)
-
-    # Using the posterior distribution of theta
-    cov_theta = model.posterior_precision.to_matrix().inverse()
-    ent_theta = compute_normal_entropy(cov_theta)
+    N = x.shape[0]
+    C -= 1
 
     # Joint of Y and theta is given by p(y | theta, x) * p(theta | x) (Both conditional on training data)
-    ent_joint = compute_joint_entropy(model, x)
+    cov_joint = compute_joint_covariance(model, x, K)
 
-    eig = ent_y + ent_theta - ent_joint
-    
+    cov_y = cov_joint[:(N * C), :(N * C)]
+    cov_theta = cov_joint[(N * C):, (N * C):]
+
+    det_y = torch.logdet(cov_y)
+    det_theta = torch.logdet(cov_theta)
+    det_joint = torch.logdet(cov_joint)
+
+    eig = det_y + det_theta - det_joint
+    print('det_y:', det_y, 'det_theta:', det_theta, 'det_joint:', det_joint, 'eig:', eig)
+
     return eig
 
-def compute_joint_entropy(model, x, K):
+def compute_joint_covariance(model, x, K):
     
     N = x.shape[0]
 
@@ -156,14 +203,17 @@ def compute_joint_entropy(model, x, K):
 
     D = posterior_weights.shape[1]
 
-    assert K > N + D # Ensure that the number of samples is greater than the number of parameters and data points
+    if K < N + D + 1:# Necessary condition for full rank covariance matrix
+        # add warning
+        #print("Warning: K < N + D + 1. The covariance matrix may not be full rank")
+        pass
 
     # For each theta, compute the predicted probabilities
-    probs = torch.zeros(K, N, 10)
+    probs = torch.zeros(K, N, 9)
 
     for i, weights in enumerate(posterior_weights):
         set_last_linear_layer_combined(model.model, weights)
-        probs[i] = model(x, pred_type='glm', link_approx='bridge')
+        probs[i] = model(x, pred_type='glm', link_approx='probit')[:, :-1]
     
     # Without flattening stack the probabilities and the weights into a tensor of shape: (K, (D + N))
     probs_and_theta = torch.cat([probs.view(K, -1), posterior_weights], dim=1)
@@ -172,12 +222,10 @@ def compute_joint_entropy(model, x, K):
     probs_and_theta = probs_and_theta.T
     
     # Obtain the covariance matrix of the joint distribution of Y and theta of shape: (D + N, D + N)
-    cov_joint = torch.cov(probs_and_theta)
+    #cov_joint = torch.cov(probs_and_theta)
+    cov_joint = torch.tensor(LedoitWolf().fit(probs_and_theta.T.numpy()).covariance_)
 
-    # Compute the entropy of the joint
-    ent_joint = compute_normal_entropy(cov_joint)
-
-    return ent_joint, probs, cov_joint
+    return cov_joint
 
 
 def compute_emp_cov(la, x_test, K=1000):
