@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 from sklearn.covariance import LedoitWolf
 
 
@@ -11,7 +12,7 @@ def compute_entropy(la_model, data):
 
 def _h(p):
     # p is a tensor of shape (n_data, n_classes)
-    return -torch.sum(p * torch.log(p + 1e-12), dim=1)
+    return -torch.sum(p * torch.log(p + 1e-16), dim=1)
 
 def compute_multivariate_entropy(la_model, data):
     ent = compute_entropy(la_model, data)
@@ -124,7 +125,7 @@ def compute_bald(la_model, data, train_loader, refit=True, n_samples=50):
 def compute_normal_entropy(cov):
     return 0.5 * torch.logdet(cov) + 0.5 * cov.shape[0] * (1 + torch.log(torch.tensor(2 * torch.pi)))
 
-def max_joint_eig(model, data, K, batch_size):
+def max_joint_eig(model, data, K, batch_size, eps=0.1):
     '''
     Function to greedily compute the maximum joint expected information gain
     --------------------------------
@@ -139,25 +140,28 @@ def max_joint_eig(model, data, K, batch_size):
     '''
     selected_indices = []
     N = data.shape[0]
+    n_samples = int((N / batch_size) * np.log(1/eps))
 
     for _ in range(batch_size):
         max_eig = -torch.inf
         max_index = None
 
-        for i in range(N):
-            if i in selected_indices:
-                continue
+        # take random subsample (of n_samples) from the remaining indices
+        remaining_indices = [i for i in range(N) if i not in selected_indices]
+        subsample = np.random.choice(remaining_indices, n_samples, replace=False)
+
+        for i in subsample:
             current_indices = selected_indices + [i]
             current_data = data[current_indices]
 
             eig = compute_joint_eig(model, current_data, K)
+            print('eig:', eig)
 
-            if eig > max_eig:
+            if max_index is None or eig > max_eig :
                 max_eig = eig
                 max_index = i
             
         selected_indices.append(max_index)
-        print('selected:', selected_indices)
 
     return selected_indices, max_eig
 
@@ -183,13 +187,15 @@ def compute_joint_eig(model, x, K, C=10):
     cov_joint = compute_joint_covariance(model, x, K)
 
     cov_y = cov_joint[:(N * C), :(N * C)]
-    cov_theta = cov_joint[(N * C):, (N * C):]
+    #cov_theta = cov_joint[(N * C):, (N * C):]
+    cov_theta = model.posterior_precision.to_matrix().inverse()
 
     det_y = torch.logdet(cov_y)
     det_theta = torch.logdet(cov_theta)
     det_joint = torch.logdet(cov_joint)
 
-    eig = det_y + det_theta - det_joint
+    eig = 0.5*(det_y + det_theta - det_joint)
+    
     print('det_y:', det_y, 'det_theta:', det_theta, 'det_joint:', det_joint, 'eig:', eig)
 
     return eig
@@ -222,19 +228,23 @@ def compute_joint_covariance(model, x, K):
     probs_and_theta = probs_and_theta.T
     
     # Obtain the covariance matrix of the joint distribution of Y and theta of shape: (D + N, D + N)
-    #cov_joint = torch.cov(probs_and_theta)
-    cov_joint = torch.tensor(LedoitWolf().fit(probs_and_theta.T.numpy()).covariance_)
+    cov_joint = torch.cov(probs_and_theta)
+    #cov_joint = torch.tensor(LedoitWolf().fit(probs_and_theta.T.numpy()).covariance_)
 
     return cov_joint
 
 
-def compute_emp_cov(la, x_test, K=1000):
+def compute_emp_cov(la, x_test, K=100):
     res = la.predictive_samples(x_test, n_samples=K)  # shape K x N x C
-    avg = res.mean(dim=0)  # shape   N x C
-    res -= avg.unsqueeze(0)  # shape K x N x C
+    res  = res - res.mean(dim=0).unsqueeze(0)  # shape K x N x C
+
+    # get probababilities of each class for each sample and each data point
+    probs = la(x_test).unsqueeze(0)  # shape N x C
+    res = res * probs  # shape K x N x C
 
     cov_k = torch.einsum('knc,kmc->nm', res, res) / K
     return cov_k
+    
 
 if __name__ == '__main__':
     pass

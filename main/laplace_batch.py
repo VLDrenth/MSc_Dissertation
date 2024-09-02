@@ -3,6 +3,7 @@ import numpy as np
 import gpytorch as gpt
 from scipy.stats import dirichlet
 from .badge import BADGE, TrainedBayesianModel
+from .kmeans_init_float import init_centers
 from tqdm.auto import tqdm
 from batchbald_redux.batchbald import CandidateBatch
 from .bald_sampling import compute_bald, compute_entropy, compute_conditional_entropy, compute_emp_cov, max_joint_eig
@@ -122,9 +123,20 @@ def get_laplace_batch(model, pool_loader, acquisition_batch_size, method, device
         # extract data from the pool
         pool_data = torch.cat([data for data, _ in pool_loader], dim=0).to(device=device)
 
-        indices, score = max_joint_eig(model=model, data=pool_data, K=10, batch_size=acquisition_batch_size)
+        indices, score = max_joint_eig(model=model, data=pool_data, K=1000, batch_size=acquisition_batch_size)
 
         return CandidateBatch(indices=indices, scores=[score]*acquisition_batch_size)
+    elif method == 'similarity_kmeans':
+        # extract data from the pool
+        pool_data = torch.cat([data for data, _ in pool_loader], dim=0).to(device=device)
+        S = compute_S(model, pool_data)
+
+        # apply kmeans++ initalization to the S diagonals
+        mat = S.cpu().numpy().astype(np.float32)
+        print(S.dtype)
+        indices = init_centers(mat, acquisition_batch_size)
+
+        return CandidateBatch(indices=torch.tensor(indices), scores=[0]*acquisition_batch_size)
     else:
         raise ValueError('Invalid method')
     
@@ -133,7 +145,7 @@ def get_laplace_batch(model, pool_loader, acquisition_batch_size, method, device
     return CandidateBatch(indices=indices.squeeze().tolist(), scores=values.squeeze().tolist())
 
 
-        
+  
 def greedy_max_logdet(matrix, k):
     """
     Greedily selects k rows and columns from the input matrix to maximize the determinant.

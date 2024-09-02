@@ -27,6 +27,11 @@ class BayesianMNISTCNN_EBM(BayesianModule):
         self.conv2 = nn.Conv2d(16, 32, kernel_size=5)
         self.fc1 = nn.Linear(512, 32)
         self.fc2 = nn.Linear(32, num_classes)
+        
+        # move model to device
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.to(self.device)
+
 
     def mc_forward_impl(self, input: torch.Tensor, freeze_encoder: bool):
         with freeze_encoder_context(freeze_encoder):
@@ -39,6 +44,31 @@ class BayesianMNISTCNN_EBM(BayesianModule):
         input = self.fc2(input)
 
         return input, embedding
+
+class BayesianMLP_EBM(BayesianModule):
+    """Without Softmax."""
+
+    def __init__(self, num_classes=10):
+        super().__init__()
+
+        self.fc1 = nn.Linear(768, 128)
+        self.fc2 = nn.Linear(128, 32)
+        self.fc3 = nn.Linear(32, num_classes)
+        
+        # move model to device
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.to(self.device)
+
+    def mc_forward_impl(self, input: torch.Tensor, freeze_encoder: bool):
+        with freeze_encoder_context(freeze_encoder):
+            input = F.relu((self.fc1(input)))
+            input = F.relu((self.fc2(input)))
+
+        embedding = input
+        input = self.fc3(input)
+
+        return input, embedding
+
 
 class GradEmbeddingType(Enum):
     BIAS = 0
@@ -172,7 +202,7 @@ class TrainedBayesianModel(TrainedModel):
 
         # NOTE: this wastes memory bandwidth, but is needed for ensembles where more than one model might not fit
         # into memory.
-        self.model.to("cpu")
+        #self.model.to("cpu")
 
         return log_probs_N_K_C, labels_B
 

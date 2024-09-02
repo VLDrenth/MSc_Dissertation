@@ -2,10 +2,24 @@ import dill
 import time
 import os
 import json
+import torch
+import io
 
 def generate_experiment_id():
     """Generates a unique experiment ID based on the current timestamp."""
     return time.strftime("%Y%m%d-%H%M%S")
+
+def results_to_cpu(res):
+    '''
+    Move test_loss, added_labels  
+
+    test_loss: list of tensors
+    added_labels: list of tensors
+    '''
+    res['test_loss'] = [loss.cpu() for loss in res['test_loss']]
+    res['added_labels'] = [labels.cpu() for labels in res['added_labels']]
+    
+    return res
 
 def save_experiment(config, results, experiment_id, base_dir='experiments'):
     """Saves experiment configuration and results to files using dill."""

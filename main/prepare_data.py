@@ -2,6 +2,7 @@ from batchbald_redux import repeated_mnist, active_learning
 from torch.utils import data
 from ddu_dirty_mnist import DirtyMNIST
 import torch
+import numpy as np
 from torchvision import datasets, transforms
 
 def create_dataloaders(config, **kwargs):
@@ -9,11 +10,13 @@ def create_dataloaders(config, **kwargs):
     if config.dataset == 'mnist':
         train_dataset, test_dataset = repeated_mnist.create_MNIST_dataset()
     elif config.dataset == 'repeated_mnist':
-        train_dataset, test_dataset = repeated_mnist.create_repeated_MNIST_dataset()
+        train_dataset, test_dataset = repeated_mnist.create_repeated_MNIST_dataset(num_repetitions=config.num_repeats)
     elif config.dataset == 'dirty_mnist':
         train_dataset, test_dataset = create_dirty_MNIST_dataset()
     elif config.dataset == 'fashion_mnist':
         train_dataset, test_dataset = create_fashion_MNIST_dataset()
+    elif config.dataset == 'imagenet':
+        train_dataset, test_dataset = create_embeddings_dataset()
     else:
         raise ValueError(f'Unknown dataset {config.dataset}')
     
@@ -25,7 +28,51 @@ def create_dataloaders(config, **kwargs):
 def create_dirty_MNIST_dataset():
     train_dataset = DirtyMNIST("./data", train=True, download=False)
     test_dataset = DirtyMNIST("./data", train=False, download=False)
+    #test_dataset = data.Subset(test_dataset, range(10000))
     return train_dataset, test_dataset
+
+def create_embeddings_dataset():
+    '''
+    Create torch datasets to be used in a torch Dataloader for training and testing
+    '''
+
+    # load embeddings and labels
+    embeddings_train = np.load("data/imagenet-embeddings/embeddings_vitb4_300ep_train.npy")
+    labels_train = np.load("data/imagenet-embeddings/superclass_labels_train.npy")
+
+    embeddings_val = np.load("data/imagenet-embeddings/embeddings_vitb4_300ep_val.npy")
+    labels_val = np.load("data/imagenet-embeddings/superclass_labels_val.npy")
+
+    # convert to torch tensors
+    embeddings_train = torch.tensor(embeddings_train)
+    labels_train = torch.tensor(labels_train)
+
+    embeddings_val = torch.tensor(embeddings_val)
+    labels_val = torch.tensor(labels_val)
+
+    # change labels to long
+    labels_train = labels_train.long()
+    labels_val = labels_val.long()
+
+    # create datasets with embeddings and labels as
+    train_dataset = torch.utils.data.TensorDataset(embeddings_train, labels_train)
+    val_dataset = torch.utils.data.TensorDataset(embeddings_val, labels_val)
+
+    train_dataset.targets = labels_train
+    val_dataset.targets = labels_val
+
+    # take a subset of the data for faster training
+    train_dataset = data.Subset(train_dataset, range(10**5))
+
+    # take all validation data of classes 0-9 and add 10% of data from class 10
+    val_indices = []
+    for i in range(10):
+        val_indices += np.where(labels_val == i)[0].tolist()
+    val_indices += np.where(labels_val == 10)[0].tolist()[:int(0.1*len(np.where(labels_val == 10)[0]))]
+    val_dataset = data.Subset(val_dataset, val_indices)
+
+    
+    return train_dataset, val_dataset
 
 def create_fashion_MNIST_dataset(data_dir="./data"):
     # Set up transforms

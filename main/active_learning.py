@@ -3,11 +3,13 @@ import torch.nn as nn
 from tqdm.auto import tqdm
 import laplace
 import logging
+import time
 
 from dataclasses import dataclass
 from typing import Any
 from batchbald_redux import repeated_mnist, active_learning
 from .laplace_batch import get_laplace_batch
+from .utils import results_to_cpu
 from laplace.curvature import AsdlGGN
 
 @dataclass
@@ -42,6 +44,7 @@ def run_active_learning(train_loader, test_loader, pool_loader, active_learning_
     test_loss = []
     added_indices = []
     added_labels = []
+    times = []
 
     pbar = tqdm(initial=len(active_learning_data.training_dataset), total=config.max_training_samples, desc="Training Set Size")
     loss_fn = nn.NLLLoss()
@@ -58,11 +61,12 @@ def run_active_learning(train_loader, test_loader, pool_loader, active_learning_
             target = target.to(device=device)
 
             optimizer.zero_grad()
-
+            
             logits = model(data)
             if config.al_method == 'badge':
                 logits = logits[0]
             prediction = torch.log_softmax(logits.squeeze(1), dim=1)
+
             loss = loss_fn(prediction, target)
 
             loss.backward()
@@ -111,10 +115,14 @@ def run_active_learning(train_loader, test_loader, pool_loader, active_learning_
                             backend=backend,
                             temperature=config.temperature
                         )
-        if config.al_method not in  ['random', 'badge']:
-            la.fit(train_loader, progress_bar=False)
+        # time the acquisition function and the laplace approximation
+        start_time = time.perf_counter()
 
-            la.optimize_prior_precision(method='marglik', verbose=False, pred_type='glm', link_approx='probit')
+        if config.al_method not in  ['random', 'badge']:
+
+            la.fit(train_loader)
+
+            la.optimize_prior_precision(method='marglik', pred_type='glm', link_approx='probit')
             
             candidate_batch = get_laplace_batch(model=la, pool_loader=pool_loader,
                                                     acquisition_batch_size=config.acquisition_batch_size,
@@ -125,7 +133,11 @@ def run_active_learning(train_loader, test_loader, pool_loader, active_learning_
                                                     acquisition_batch_size=config.acquisition_batch_size,
                                                     device=device, 
                                                     method=config.al_method)
+            
+        total_time = time.perf_counter() - start_time
+        times.append(total_time)
 
+        
         targets = repeated_mnist.get_targets(active_learning_data.pool_dataset)
         dataset_indices = active_learning_data.get_dataset_indices(candidate_batch.indices)
 
@@ -138,4 +150,7 @@ def run_active_learning(train_loader, test_loader, pool_loader, active_learning_
         added_labels.append(targets[candidate_batch.indices])
         pbar.update(len(dataset_indices))
 
-    return {'test_accs': test_accs, 'test_loss': test_loss, 'added_indices': added_indices, 'added_labels': added_labels}
+    test_loss = [loss.cpu() for loss in test_loss]
+    added_labels = [labels.cpu() for labels in added_labels]
+
+    return {'test_accs': test_accs, 'test_loss': test_loss, 'added_indices': added_indices, 'added_labels': added_labels, 'times': times}

@@ -3,6 +3,8 @@ import torch.nn as nn
 
 
 def train_model(model, train_loader, num_epochs=5, lr=1e-3, reg_lambda=0, opt_params={}, verbose=True):
+    device = model.device
+    
     # Define the loss function and optimizer
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), **opt_params,
@@ -13,6 +15,9 @@ def train_model(model, train_loader, num_epochs=5, lr=1e-3, reg_lambda=0, opt_pa
 
     for epoch in range(num_epochs):
         for batch_idx, (data, targets) in enumerate(train_loader):
+            data = data.to(device)
+            targets = targets.to(device)
+
             # forward pass
             scores = model(data)
             loss = criterion(scores, targets)

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+
 # set configurations for redundant MNIST experiment
 @dataclass
 class ActiveLearningConfigRedundant:
@@ -8,17 +9,17 @@ class ActiveLearningConfigRedundant:
     backend: str = 'AsdlGGN'
     temperature: float = 1.0
     max_training_samples: int = 100
-    acquisition_batch_size: int = 5
+    acquisition_batch_size: int = 10
     al_method: str = 'bald'
     test_batch_size: int = 512
     num_classes: int = 10
-    num_initial_samples: int = 40
+    num_initial_samples: int = 20
     training_iterations: int = 4096 * 6
     scoring_batch_size: int = 64
     train_batch_size: int = 64
-    extract_pool: int = 0
+    extract_pool: int = 55000 + 9 * 60000
     num_repeats: int = 10
-    samples_per_digit: int = 50
+    samples_per_digit: int = 100
 
 @dataclass
 class ActiveLearningConfig:
@@ -35,7 +36,7 @@ class ActiveLearningConfig:
     training_iterations: int = 4096 * 6
     scoring_batch_size: int = 64
     train_batch_size: int = 64
-    extract_pool: int = 59000  # number of samples to extract from the dataset (bit of a hack)
+    extract_pool: int = 55000  # number of samples to extract from the dataset (bit of a hack)
     dataset: str = 'mnist'
 
 def get_config(min_samples, max_samples, acquisition_batch_size, method, dataset):
@@ -49,7 +50,14 @@ def get_config(min_samples, max_samples, acquisition_batch_size, method, dataset
     dataset: str - dataset to uses
 
     '''
-    config = ActiveLearningConfig()
+    if dataset == 'repeated_mnist':
+        config = ActiveLearningConfigRedundant()
+    elif dataset == 'imagenet':
+        config = ActiveLearningConfig()
+        config.extract_pool = 322979 - 32000
+    else:
+        config = ActiveLearningConfig()
+
     config.num_initial_samples = min_samples
     config.max_training_samples = max_samples
     config.al_method = method
