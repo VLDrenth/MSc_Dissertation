@@ -20,6 +20,9 @@ This repo contains code for my dissertation on Bayesian Batch Active Learning fo
         - `plotting`: Used for plotting the accuracy and loss curves
         - `running_times`: Used for plotting the run-time plot
         - `statistical_test`: Used for generating the results for the Friedman and Nemenyi tests.
+    - ** Test Notebooks**:
+       - Notebooks in test_notebooks may be ignored and were only used to test out correctness of implementation, experimenting, etc.
+         Code in these notebooks is not cleaned up and may not have found its way into the main functionality.
 
 
 
