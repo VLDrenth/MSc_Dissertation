@@ -8,8 +8,8 @@ This repo contains code for my dissertation on Bayesian Batch Active Learning fo
     - **Python scripts**:
         - `prepare_data`: Contains scripts for creating the data loaders.
         - `models`: Contains implementations of the CNN and MLP used in experiments.
-        - `active_learning`: Contains function that implements the main active learning logic, based on code from https://github.com/BlackHC/batchbald_redux.
-        - `badge`: Contains implementation of BADGE, based on code from ???.
+        - `active_learning`: Contains function that implements the main active learning logic, based on code from [BlackHC/batchbald_redux](https://github.com/BlackHC/batchbald_redux).
+        - `badge`: Contains implementation of BADGE, based on code from [BlackHC/active_learning_redux](https://github.com/BlackHC/active_learning_redux/)
         - `approximation`: Contains the computation of the similarity matrix and its feature map.
         - `bald_sampling`: Contains LA based implementation of BALD and the approximation of the joint MI.
         - `laplace_batch`: Contains implementation of batch acquisition of all used methods.
