@@ -26,8 +26,8 @@ def create_dataloaders(config, **kwargs):
     return train_loader, test_loader, pool_loader, active_learning_data
 
 def create_dirty_MNIST_dataset():
-    train_dataset = DirtyMNIST("./data", train=True, download=False)
-    test_dataset = DirtyMNIST("./data", train=False, download=False)
+    train_dataset = DirtyMNIST("./data", train=True, download=True)
+    test_dataset = DirtyMNIST("./data", train=False, download=True)
     return train_dataset, test_dataset
 
 def create_embeddings_dataset():

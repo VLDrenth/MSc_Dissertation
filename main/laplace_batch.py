@@ -12,9 +12,9 @@ import math
 def get_laplace_batch(model, pool_loader, acquisition_batch_size, method, device=None):
     '''
     model: Laplace model
-    batch_size: how many observations to return
+    acquisition_batch_size: how many observations to return
     device: device to run on
-    dtype: data type
+    pool_loader: data loader for the pool
     method: method to use for batch selection
 
     Returns: batch of observations (CandiateBatch object)

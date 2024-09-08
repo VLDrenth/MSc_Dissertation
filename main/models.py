@@ -16,17 +16,17 @@ class ConvNet(nn.Module):
                 
         self.features = nn.Sequential(
             nn.Conv2d(in_channels=1, out_channels=16, kernel_size=5, stride=1),
-            nn.GELU(),
+            nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Conv2d(in_channels=16, out_channels=self.dim_out, kernel_size=5, stride=1),
-            nn.GELU(),
+            nn.ReLU(),
             nn.MaxPool2d(kernel_size=2, stride=2),
             nn.Flatten()
         )
         
         self.classifier = nn.Sequential(
             nn.Linear(4*4*self.dim_out, self.dim_out),
-            nn.GELU(),
+            nn.ReLU(),
             nn.Linear(self.dim_out, 10)
         )
 
@@ -52,7 +52,7 @@ class MLP(nn.Module):
     Made for Imagenet embeddings, so the input is 784 dimensional.
     '''
 
-    def __init__(self, num_classes=11):
+    def __init__(self, num_classes=10):
         super(MLP, self).__init__()
         self.fc1 = nn.Linear(768, 128)
         self.fc2 = nn.Linear(128, 32)

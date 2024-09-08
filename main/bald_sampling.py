@@ -185,7 +185,6 @@ def compute_joint_eig(model, x, K, C=10):
     cov_joint = compute_joint_covariance(model, x, K)
 
     cov_y = cov_joint[:(N * C), :(N * C)]
-    #cov_theta = cov_joint[(N * C):, (N * C):]
     cov_theta = model.posterior_precision.to_matrix().inverse()
 
     det_y = torch.logdet(cov_y)
@@ -209,8 +208,8 @@ def compute_joint_covariance(model, x, K):
 
     if K < N + D + 1:# Necessary condition for full rank covariance matrix
         # add warning
-        #print("Warning: K < N + D + 1. The covariance matrix may not be full rank")
-        pass
+        print("Warning: K < N + D + 1. The covariance matrix may not be full rank")
+        
 
     # For each theta, compute the predicted probabilities
     probs = torch.zeros(K, N, 9)
@@ -236,8 +235,8 @@ def compute_emp_cov(la, x_test, K=1000):
     res  = res - res.mean(dim=0).unsqueeze(0)  # shape K x N x C
 
     # get probababilities of each class for each sample and each data point
-    probs = la(x_test).unsqueeze(0)  # shape N x C
-    res = res * probs  # shape K x N x C
+    #probs = la(x_test).unsqueeze(0)  # shape N x C
+    #res = res * probs  # shape K x N x C
 
     cov_k = torch.einsum('knc,kmc->nm', res, res) / K
     return cov_k
