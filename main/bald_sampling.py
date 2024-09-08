@@ -1,7 +1,5 @@
 import torch
 import numpy as np
-from sklearn.covariance import LedoitWolf
-
 
 def compute_entropy(la_model, data):
     # for each datapoint compute the probabilties of each class
@@ -82,7 +80,7 @@ def set_last_linear_layer_combined(model, new_weights_and_bias):
 
     return last_linear_layer
 
-def compute_conditional_entropy(la_model, data, train_loader, refit=True, n_samples=50):
+def compute_conditional_entropy(la_model, data, train_loader, refit=False, n_samples=50):
     # Sample from the posterior
     posterior_weights = la_model.sample(n_samples=n_samples)
     entropies = torch.zeros(posterior_weights.shape[0], data.shape[0])
@@ -229,12 +227,11 @@ def compute_joint_covariance(model, x, K):
     
     # Obtain the covariance matrix of the joint distribution of Y and theta of shape: (D + N, D + N)
     cov_joint = torch.cov(probs_and_theta)
-    #cov_joint = torch.tensor(LedoitWolf().fit(probs_and_theta.T.numpy()).covariance_)
 
     return cov_joint
 
 
-def compute_emp_cov(la, x_test, K=100):
+def compute_emp_cov(la, x_test, K=1000):
     res = la.predictive_samples(x_test, n_samples=K)  # shape K x N x C
     res  = res - res.mean(dim=0).unsqueeze(0)  # shape K x N x C
 

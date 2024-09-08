@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 
-def train_model(model, train_loader, num_epochs=5, lr=1e-3, reg_lambda=0, opt_params={}, verbose=True):
+def train_model(model, train_loader, num_epochs=5, lr=1e-3, reg_lambda=1e-4, opt_params={}, verbose=True):
     device = model.device
     
     # Define the loss function and optimizer

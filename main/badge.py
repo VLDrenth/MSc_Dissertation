@@ -13,7 +13,7 @@ from sklearn.metrics import pairwise_distances
 from scipy import stats
 
 ##
-## Copied from batchbald_redux which is based on Jordan Ash 
+## Copied from batchbald_redux which is based on Jordan Ash's implementation
 ##
 
 

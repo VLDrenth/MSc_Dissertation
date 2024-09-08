@@ -17,7 +17,7 @@ class ActiveLearningConfigRedundant:
     training_iterations: int = 4096 * 6
     scoring_batch_size: int = 64
     train_batch_size: int = 64
-    extract_pool: int = 55000 + 9 * 60000
+    extract_pool: int = 9 * 60000
     num_repeats: int = 10
     samples_per_digit: int = 100
 
@@ -36,7 +36,7 @@ class ActiveLearningConfig:
     training_iterations: int = 4096 * 6
     scoring_batch_size: int = 64
     train_batch_size: int = 64
-    extract_pool: int = 55000  # number of samples to extract from the dataset (bit of a hack)
+    extract_pool: int = 0 
     dataset: str = 'mnist'
 
 def get_config(min_samples, max_samples, acquisition_batch_size, method, dataset):
@@ -54,7 +54,7 @@ def get_config(min_samples, max_samples, acquisition_batch_size, method, dataset
         config = ActiveLearningConfigRedundant()
     elif dataset == 'imagenet':
         config = ActiveLearningConfig()
-        config.extract_pool = 322979 - 32000
+        config.extract_pool = 322979 * (1/3)
     else:
         config = ActiveLearningConfig()
 

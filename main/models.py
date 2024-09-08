@@ -1,33 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from batchbald_redux import consistent_mc_dropout
 from .badge import BayesianMLP_EBM, BayesianMNISTCNN_EBM
 
-class BayesianConvNet(consistent_mc_dropout.BayesianModule):
-    '''
-    Implementation of a Bayesian convolutional neural network with two convolutional layers and two fully connected layers.
-    '''
-    def __init__(self, num_classes=10):
-        super().__init__()
-
-        self.conv1 = nn.Conv2d(1, 32, kernel_size=5)
-        self.conv1_drop = consistent_mc_dropout.ConsistentMCDropout2d()
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=5)
-        self.conv2_drop = consistent_mc_dropout.ConsistentMCDropout2d()
-        self.fc1 = nn.Linear(1024, 128)
-        self.fc1_drop = consistent_mc_dropout.ConsistentMCDropout()
-        self.fc2 = nn.Linear(128, num_classes)
-
-    def mc_forward_impl(self, input: torch.Tensor):
-        input = F.relu(F.max_pool2d(self.conv1_drop(self.conv1(input)), 2))
-        input = F.relu(F.max_pool2d(self.conv2_drop(self.conv2(input)), 2))
-        input = input.view(-1, 1024)
-        input = F.relu(self.fc1_drop(self.fc1(input)))
-        input = self.fc2(input)
-        input = F.log_softmax(input, dim=1)
-
-        return input
     
 class ConvNet(nn.Module):
     '''
@@ -121,7 +96,7 @@ class CNN(nn.Module):
 
 def get_model_constructor(method, dataset):
     if dataset == 'imagenet':
-        # Linear models only
+        # MLP models only
         if method == 'badge':
             return BayesianMLP_EBM
         else:

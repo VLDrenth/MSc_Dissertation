@@ -6,33 +6,12 @@ import logging
 import time
 
 from dataclasses import dataclass
-from typing import Any
-from batchbald_redux import repeated_mnist, active_learning
+from batchbald_redux import repeated_mnist
 from .laplace_batch import get_laplace_batch
-from .utils import results_to_cpu
 from laplace.curvature import AsdlGGN
-
-@dataclass
-class ActiveLearningConfig:
-    subset_of_weights: str = 'last_layer'
-    hessian_structure: str = 'kron'
-    backend: str = 'AsdlGGN'
-    temperature: float = 1.0
-    max_training_samples: int = 100
-    acquisition_batch_size: int = 5
-    al_method: str = 'entropy'
-    test_batch_size: int = 512
-    num_classes: int = 10
-    num_initial_samples: int = 40
-    training_iterations: int = 4096 * 6  
-    scoring_batch_size: int = 64
-    train_batch_size: int = 64
-    extract_pool: int = 55000
 
 
 def run_active_learning(train_loader, test_loader, pool_loader, active_learning_data, model_constructor, config, device):
-    kwargs = {"num_workers": 1, "pin_memory": True}
-
     if config.backend == 'AsdlGGN':
         backend = AsdlGGN
 
@@ -119,11 +98,14 @@ def run_active_learning(train_loader, test_loader, pool_loader, active_learning_
         start_time = time.perf_counter()
 
         if config.al_method not in  ['random', 'badge']:
-
+            
+            # Fit Laplace approximation
             la.fit(train_loader)
 
+            # Empirical Bayes for prior precision
             la.optimize_prior_precision(method='marglik', pred_type='glm', link_approx='probit')
             
+            # Get acquisition batch
             candidate_batch = get_laplace_batch(model=la, pool_loader=pool_loader,
                                                     acquisition_batch_size=config.acquisition_batch_size,
                                                     device=device, 
@@ -137,7 +119,6 @@ def run_active_learning(train_loader, test_loader, pool_loader, active_learning_
         total_time = time.perf_counter() - start_time
         times.append(total_time)
 
-        
         targets = repeated_mnist.get_targets(active_learning_data.pool_dataset)
         dataset_indices = active_learning_data.get_dataset_indices(candidate_batch.indices)
 

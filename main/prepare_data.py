@@ -10,7 +10,7 @@ def create_dataloaders(config, **kwargs):
     if config.dataset == 'mnist':
         train_dataset, test_dataset = repeated_mnist.create_MNIST_dataset()
     elif config.dataset == 'repeated_mnist':
-        train_dataset, test_dataset = repeated_mnist.create_repeated_MNIST_dataset(num_repetitions=config.num_repeats)
+        train_dataset, test_dataset = create_small_repeated_MNIST_dataset(num_repetitions=config.num_repeats)
     elif config.dataset == 'dirty_mnist':
         train_dataset, test_dataset = create_dirty_MNIST_dataset()
     elif config.dataset == 'fashion_mnist':
@@ -28,7 +28,6 @@ def create_dataloaders(config, **kwargs):
 def create_dirty_MNIST_dataset():
     train_dataset = DirtyMNIST("./data", train=True, download=False)
     test_dataset = DirtyMNIST("./data", train=False, download=False)
-    #test_dataset = data.Subset(test_dataset, range(10000))
     return train_dataset, test_dataset
 
 def create_embeddings_dataset():
@@ -61,9 +60,6 @@ def create_embeddings_dataset():
     train_dataset.targets = labels_train
     val_dataset.targets = labels_val
 
-    # take a subset of the data for faster training
-    train_dataset = data.Subset(train_dataset, range(10**5))
-
     # take all validation data of classes 0-9 and add 10% of data from class 10
     val_indices = []
     for i in range(10):
@@ -71,7 +67,6 @@ def create_embeddings_dataset():
     val_indices += np.where(labels_val == 10)[0].tolist()[:int(0.1*len(np.where(labels_val == 10)[0]))]
     val_dataset = data.Subset(val_dataset, val_indices)
 
-    
     return train_dataset, val_dataset
 
 def create_fashion_MNIST_dataset(data_dir="./data"):
@@ -89,50 +84,49 @@ def create_fashion_MNIST_dataset(data_dir="./data"):
 
     return train_dataset, test_dataset
 
+def create_small_repeated_MNIST_dataset(*, num_repetitions: int = 10, add_noise: bool = True):
+    # Based on repeated_mnist.create_repeated_MNIST_dataset from batchbald_redux
 
-def create_repeated_MNIST_dataloaders(config, **kwargs):
-    # Set up transforms
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.1307,), (0.3081,))
-    ])
+    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize((0.1307,), (0.3081,))])
 
-    # Load and prepare train dataset
-    train_dataset = datasets.MNIST("data", train=True, download=False, transform=transform)
-    
-    train_dataset_indices = active_learning.get_balanced_sample_indices(
-        repeated_mnist.get_targets(train_dataset),
-        num_classes=config.num_classes,
-        n_per_digit=config.samples_per_digit
-    )
-    
-    train_dataset = data.Subset(train_dataset, train_dataset_indices)
-    train_dataset = data.ConcatDataset([train_dataset] * config.num_repeats)
-    
-    # Add noise to the dataset
-    dataset_noise = torch.empty((len(train_dataset), 28, 28), dtype=torch.float32).normal_(0.0, 0.1)
-    
-    def apply_noise(idx, sample):
-        data, target = sample
-        return data + dataset_noise[idx], target
-    
-    train_dataset = repeated_mnist.TransformedDataset(train_dataset, transformer=apply_noise)
+    train_dataset = datasets.MNIST("data", train=True, download=True, transform=transform)
 
-    # Load test dataset
-    test_dataset = datasets.MNIST("data", train=False, download=False, transform=transform)
+    # take random subset 10% of the data
+    indices = active_learning.get_balanced_sample_indices(repeated_mnist.get_targets(train_dataset),
+                                                          num_classes=10,
+                                                           n_per_digit= (1/(10 * num_repetitions)) * len(train_dataset))
+    train_dataset = data.Subset(train_dataset, indices)
 
-    # Create data loaders
-    train_loader, test_loader, pool_loader, active_learning_data = create_dataloaders_AL(train_dataset, test_dataset, config)
-    
-    return train_loader, test_loader, pool_loader, active_learning_data
+    if num_repetitions > 1:
+        train_dataset = data.ConcatDataset([train_dataset] * num_repetitions)
+
+    if add_noise:
+        dataset_noise = torch.empty((len(train_dataset), 28, 28), dtype=torch.float32).normal_(0.0, 0.1)
+
+        def apply_noise(idx, sample):
+            data, target = sample
+            return data + dataset_noise[idx], target
+
+        train_dataset = repeated_mnist.TransformedDataset(train_dataset, transformer=apply_noise)
+
+    test_dataset = datasets.MNIST("data", train=False, transform=transform)
+
+    return train_dataset, test_dataset
 
 def create_dataloaders_AL(train_dataset, test_dataset, config, **kwargs):
-    # Get indices of initial samples
-    initial_samples = active_learning.get_balanced_sample_indices(
-        repeated_mnist.get_targets(train_dataset),
-        num_classes=config.num_classes,
-        n_per_digit=config.num_initial_samples / config.num_classes
-    )
+    if config.dataset == 'dirty_mnist':
+        initial_samples = active_learning.get_balanced_sample_indices(
+            repeated_mnist.get_targets(data.Subset(train_dataset, range(60000))),
+            num_classes=config.num_classes,
+            n_per_digit=config.num_initial_samples / config.num_classes
+        )
+    else:
+        # Get indices of initial samples
+        initial_samples = active_learning.get_balanced_sample_indices(
+            repeated_mnist.get_targets(train_dataset),
+            num_classes=config.num_classes,
+            n_per_digit=config.num_initial_samples / config.num_classes
+        )
 
     # Create data loaders
     test_loader = torch.utils.data.DataLoader(

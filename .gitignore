@@ -1,6 +1,17 @@
 data
 experiments_old
 experiments
+dirty_mnist_final
+experiments_dirty_mnist_10
+small_dirty_mnist
+timing
+pseudo_label_experiments
+# any png files
+*.png
+*.csv
+experiments_batch20
+good_plots
+draft2plots
 plots
 __pycache__
 thesis

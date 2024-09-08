@@ -2,12 +2,8 @@ import dill
 import time
 import os
 import json
-import torch
-import io
+import matplotlib.pyplot as plt
 
-def generate_experiment_id():
-    """Generates a unique experiment ID based on the current timestamp."""
-    return time.strftime("%Y%m%d-%H%M%S")
 
 def results_to_cpu(res):
     '''
@@ -72,3 +68,16 @@ def load_experiment(experiment_id, base_dir='experiments'):
 def load_experiments(experiment_ids, base_dir='experiments'):
     """Loads multiple experiments given a list of experiment IDs."""
     return [load_experiment(exp_id, base_dir) for exp_id in experiment_ids]
+
+def set_style():
+    plt.style.use('seaborn-v0_8-colorblind')
+    current_colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
+    # Create a new color cycle by replacing the 7th color
+    new_colors = current_colors.copy()
+
+    color_code = '#8E4585'
+    new_colors.append(color_code)
+
+    # Set the new color cycle
+    plt.rcParams['axes.prop_cycle'] = plt.cycler(color=new_colors)
