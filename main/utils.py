@@ -5,17 +5,6 @@ import json
 import matplotlib.pyplot as plt
 
 
-def results_to_cpu(res):
-    '''
-    Move test_loss, added_labels  
-
-    test_loss: list of tensors
-    added_labels: list of tensors
-    '''
-    res['test_loss'] = [loss.cpu() for loss in res['test_loss']]
-    res['added_labels'] = [labels.cpu() for labels in res['added_labels']]
-    
-    return res
 
 def save_experiment(config, results, experiment_id, base_dir='experiments'):
     """Saves experiment configuration and results to files using dill."""
@@ -36,18 +25,6 @@ def save_experiment(config, results, experiment_id, base_dir='experiments'):
     print(f"Experiment saved in {exp_dir}")
     return exp_dir
 
-def log_experiment(experiment_id, config, results, log_file='experiment_log.jsonl'):
-    """Logs a summary of the experiment to a log file."""
-    summary = {
-        'id': experiment_id,
-        'timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
-        'config': {k: str(v) for k, v in config.__dict__.items()},  # Convert all values to strings
-        'final_accuracy': results.get('test_accuracies', [None])[-1],  # Safeguard for missing keys
-        'final_loss': results.get('test_losses', [None])[-1],  # Safeguard for missing keys
-    }
-    
-    with open(log_file, 'a') as f:
-        f.write(json.dumps(summary) + '\n')
 
 def load_experiment(experiment_id, base_dir='experiments'):
     """Loads experiment configuration and results from files using dill."""
